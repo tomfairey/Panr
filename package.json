@@ -1,0 +1,56 @@
+{
+  "name": "panr",
+  "version": "1.0.0",
+  "description": "A web-based panoramic virtual tour system",
+  "main": "index.js",
+  "scripts": {
+    "start": "concurrently \"npm run start:api\" \"npm run start:web\"",
+    "start:api": "nodemon -r esm src/backend",
+    "start:web": "parcel src/frontend/index.html",
+    "start:publicweb": "parcel src/frontend/index.html --public-url ./ -d T:\\toms-home.co.uk\\public_html\\test\\panr",
+    "build": "parcel build src/frontend/index.html --no-source-maps --public-url ./ -d build",
+    "postbuild": "workbox generateSW",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tomfairey/Panr.git"
+  },
+  "author": "tomfairey",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tomfairey/Panr/issues"
+  },
+  "homepage": "https://github.com/tomfairey/Panr#readme",
+  "browserslist": [
+    "last 3 Chrome versions",
+    "Firefox 63",
+    "Node 11"
+  ],
+  "dependencies": {
+    "@fingerprintjs/fingerprintjs": "^3.0.6",
+    "@mdi/font": "^5.9.55",
+    "concurrently": "^6.0.0",
+    "esm": "^3.2.25",
+    "express": "^4.17.1",
+    "fingerprintjs": "^0.5.3",
+    "mariadb": "^2.5.3",
+    "mdi": "^2.2.43",
+    "nodemon": "^2.0.7",
+    "parcel": "^1.12.4",
+    "three": "^0.126.0",
+    "vue": "^2.6.12",
+    "vue-hot-reload-api": "^2.3.4",
+    "vue-router": "^3.5.1",
+    "vue-sweetalert2": "^4.2.0",
+    "vue-toasted": "^1.1.28",
+    "vuetify": "^2.4.4",
+    "vuex": "^3.6.2",
+    "vuex-router-sync": "^5.0.0",
+    "workbox-cli": "^6.1.1"
+  },
+  "devDependencies": {
+    "@vue/component-compiler-utils": "^3.2.0",
+    "vue-template-compiler": "^2.6.12"
+  }
+}
