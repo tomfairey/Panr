@@ -78,4 +78,31 @@ router.get("/hotspot/", (req, res) => {
     });
 });
 
+router.get("/meta/", async (req, res) => {
+    let meta = [];
+
+    let metaQuery = await database.query('panr', `SELECT * FROM \`metadata\`;`);
+    delete metaQuery.meta;
+
+    for(let metadata of metaQuery) {
+        if(metadata.global > 0) {
+            metadata.global = true;
+            delete metadata.campus;
+        } else {
+            metadata.global = false;
+        }
+
+        meta.push(metadata);
+    }
+
+    return res.json({
+        meta,
+        links: [{
+            "href": `/panr/meta/`,
+            "method": "GET",
+            "rel": "self"
+        }]
+    });
+});
+
 export default router;

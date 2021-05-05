@@ -10,16 +10,40 @@
                 </div>
                 <div class="start-container" :class="{'visible': startVisible}">
                     <div class="start-content">
-                        <div class="body">
-                            <div class="logo"></div>
-                            <div class="title">Virtual Tour</div>
-                        </div>
+                        <VueSlickCarousel v-model="slickTab" ref="slick" v-bind="slickOptions">
+                            <div class="body">
+                                <div class="logo"></div>
+                                <div class="title">Virtual Tour</div>
+                            </div>
+                            <div class="body">
+                                <div class="title">About Us</div>
+                                <div class="text">
+                                    <p>
+                                        UTC Sheffield is a multi-academy trust aiming to provide students real-life experience through employer engagements that are embedded into their education
+                                    </p>
+                                    <br />
+                                    <p>
+                                        Research has shown that UTCs provide students:
+                                    </p>
+                                    <ul>
+                                        <li>Skills Employers look for</li>
+                                        <li>Work Experience through their partners</li>
+                                        <li>The support and chance to go into further education</li>
+                                        <li>A great start to their working life</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="body">
+                                <div class="title">Contact Us</div>
+                            </div>
+                        </VueSlickCarousel>
                         <div class="button" @click="toggleStart()">Launch</div>
                     </div>
                 </div>
             </div>
             <div class="body-container">
                 <div class="ui-container">
+                    <div class="logo"></div> <!-- WHITE TRANSLUCENT CAMPUS LOGO - CLICK TO BE RETURNED TO 'SPLASH' -->
                     <label for="devOrienToggle" style="position: absolute; top: 8px; right: 30px; z-index: 6; color: #FFFFFF;">Device Orientation:</label>
                     <input id="devOrienToggle" type="checkbox" style="position: absolute; top: 10px; right: 10px; z-index: 6;" v-if="deviceOrientationSupported" v-model="deviceOrientationEnabled" />
                 </div>
@@ -32,6 +56,9 @@
 </template>
 
 <script>
+    import VueSlickCarousel from 'vue-slick-carousel';
+    import 'vue-slick-carousel/dist/vue-slick-carousel.css';
+
     import * as THREE from 'three';
     import Stats from 'three/examples/jsm/libs/stats.module.js';
     import { DeviceOrientationControls } from 'three/examples/jsm/controls/DeviceOrientationControls.js';
@@ -39,6 +66,9 @@
 
     export default {
         name: "PanrApp",
+        components: {
+            VueSlickCarousel
+        },
         data() {
             return {
                 "splashVisible": true,
@@ -52,7 +82,21 @@
                 onPointerDownMouseY: 0,
                 deviceOrientationSupported: false,
                 deviceOrientationEnabled: false,
-                initialLocation: "bac59ce4-14ac-4b97-8497-3a555f6e22ed"
+                initialLocation: "c70025ba-addf-11eb-adb5-06582416726a",
+                imagePath: null,
+                slickOptions: {
+                    slidesToShow: 1,
+                    arrows: false,
+                    dots: true,
+                    infinite: true,
+                    initialSlide: 0,
+                    mobileFirst: true,
+                    waitForAnimate: false,
+                    // edgeFriction: 0,
+                    speed: 150
+                },
+                slickTab: 0,
+                movedScene: false
             }
         },
         methods: {
@@ -65,13 +109,13 @@
                 document.documentElement.requestFullscreen();
             },
             loadScene: function(location) {
-                location = this.$store.state.locations[location];
+                location = this.$store.getters['api/locationByUuid'](location);
 
                 const geometry = new THREE.SphereGeometry(500, 60, 40);
 				// invert the geometry on the x-axis so that all of the faces point inward
 				geometry.scale(-1, 1, 1);
 
-				const texture = new THREE.TextureLoader().load(location.src);
+				const texture = new THREE.TextureLoader().load(`${this.imagePath}${location.src}`);
 				const material = new THREE.MeshBasicMaterial({ map: texture });
 
                 const mesh = new THREE.Mesh(geometry, material);
@@ -82,17 +126,18 @@
 
                 this.three.scene.add(mesh);
 
+                if(location.hasOwnProperty("hotspots") && location.hotspots.length)
                 for(let hotspot of location.hotspots) {
-                    const geometry2 = new THREE.CircleGeometry(10, 40);
-                    const material2 = new THREE.MeshBasicMaterial({ color: hotspot.colour, side: THREE.DoubleSide, transparent: true, opacity: 0.75, depthTest: false });
+                    const geometry2 = new THREE.CircleGeometry(40 * hotspot.size, 80 * hotspot.size);
+                    const material2 = new THREE.MeshBasicMaterial({ color: `#${hotspot.colour}`, side: THREE.DoubleSide, transparent: true, opacity: 0.75, depthTest: false });
                     const circle = new THREE.Mesh(geometry2, material2);
 
-                    circle.position.set(hotspot.position[0], hotspot.position[1], hotspot.position[2])
-                    circle.rotation.y = hotspot.rotation[0];
+                    circle.position.set(hotspot.x, hotspot.y, hotspot.z)
+                    circle.rotation.y = Math.atan2( ( this.three.camera.position.x - circle.position.x ), ( this.three.camera.position.z - circle.position.z ) );
                     this.three.scene.add(circle);
 
                     circle.callback = () => {
-                        this.loadScene(`${hotspot.location}`);
+                        this.loadScene(`${hotspot.destination}`);
                     }
                 }
             },
@@ -128,16 +173,33 @@
 				this.onPointerDownLon = this.lon;
 				this.onPointerDownLat = this.lat;
 
+                this.movedScene = false;
+
 				document.addEventListener('pointermove', this.onPointerMove);
 				document.addEventListener('pointerup', this.onPointerUp);
             },
             onPointerMove: function(event) {
+                this.movedScene = true;
+
                 if (this.deviceOrientationEnabled || event.isPrimary === false) return;
 
 				this.lon = (this.onPointerDownMouseX - event.clientX) * 0.1 + this.onPointerDownLon;
 				this.lat = (event.clientY - this.onPointerDownMouseY) * 0.1 + this.onPointerDownLat;
             },
             onPointerUp: function(event) {
+                if(!this.movedScene) {
+                    this.three.mouse.x = (event.clientX / this.three.renderer.domElement.clientWidth) * 2 - 1;
+                    this.three.mouse.y = -(event.clientY / this.three.renderer.domElement.clientHeight) * 2 + 1;
+
+                    this.three.raycaster.setFromCamera(this.three.mouse, this.three.camera);
+
+                    let intersects = this.three.raycaster.intersectObjects(this.three.scene.children);
+
+                    if (intersects.length > 1) {
+                        if(intersects[0].object.callback) intersects[0].object.callback();
+                    }
+                }
+
                 if (this.deviceOrientationEnabled || event.isPrimary === false) return;
 
 				document.removeEventListener('pointermove', this.onPointerMove);
@@ -148,21 +210,7 @@
 				this.three.camera.updateProjectionMatrix();
 
 				this.three.renderer.setSize(window.innerWidth, window.innerHeight);
-			},
-            onDocumentMouseDown: function(event) {
-                // event.preventDefault();
-
-                this.three.mouse.x = (event.clientX / this.three.renderer.domElement.clientWidth) * 2 - 1;
-                this.three.mouse.y = -(event.clientY / this.three.renderer.domElement.clientHeight) * 2 + 1;
-
-                this.three.raycaster.setFromCamera(this.three.mouse, this.three.camera);
-
-                let intersects = this.three.raycaster.intersectObjects(this.three.scene.children); 
-
-                if (intersects.length > 1) {
-                    if(intersects[0].object.callback) intersects[0].object.callback();
-                }
-            }
+			}
         },
         mounted() {
             this.three = {
@@ -215,16 +263,20 @@
             three.addEventListener('pointerdown', this.onPointerDown);
             three.style.touchAction = 'none';
 
-            this.loadScene(this.initialLocation);
-
-            this.animate();
-
             window.addEventListener('resize', this.onWindowResize);
 
-            new Promise((resolve) => {
+            new Promise(async (resolve) => {
+                await this.$store.dispatch('api/getAllAndStore');
+
+                this.imagePath = this.$store.getters['api/metasByName']("IMAGE_PATH")[0].value;
+
+                this.animate();
+
+                this.loadScene(this.initialLocation);
+
                 setTimeout(() => {
                     resolve();
-                }, 1500);
+                }, 500);
             }).then(() => {
                 this.toggleSplash(false);
             });
@@ -237,6 +289,61 @@
         margin: 0;
         padding: 0;
         overflow: hidden;
+    }
+    .slick-slider {
+        display: flex;
+        position: relative;
+        flex-direction: column-reverse;
+        width: 100%;
+        height: 100%;
+    }
+    .slick-slider > div.slick-list {
+        height: calc(100% - 16px);
+    }
+    .slick-slider > div.slick-list > div.slick-track {
+        display: flex;
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+    .slick-slider > div.slick-list > div.slick-track > div.slick-slide {
+        display: flex;
+        position: relative;
+        overflow: auto;
+    }
+    .slick-slider > div.slick-list > div.slick-track > div.slick-slide > div {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+    }
+    .slick-slider > div.slick-list > div.slick-track > div.slick-slide > div > * {
+        outline: none;
+    }
+
+    .slick-slider > .slick-dots {
+        display: flex !important;
+        position: relative;
+        justify-content: center;
+        align-items: center;
+        gap: 4px;
+        width: 100%;
+        height: 8px;
+    }
+    .slick-slider > .slick-dots > li {
+        display: flex;
+        width: 6px;
+        height: 6px;
+        background-color: #000000;
+        border-radius: 100%;
+        transition: background-color 0.2s ease-out;
+    }
+    .slick-slider > .slick-dots > li.slick-active {
+        background-color: #FFFFFF;
+    }
+    .slick-slider > .slick-dots > li > *, .slick-slider > .slick-dots > li > * *{
+        display: none;
     }
 </style>
 
@@ -275,6 +382,12 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
+    }
+
+    .app-scaffold .body-container .ui-container {
+        position: absolute;
+        width: 100%;
+        height: 100%;
     }
 
     .splash-container {
@@ -335,9 +448,9 @@
         justify-content: center;
         align-items: center;
         width: 100%;
-        max-width: 600px;
+        /* max-width: 600px; */
         height: 100%;
-        padding: 12px;
+        padding: 12px 0;
     }
     .start-container .start-content .body {
         display: flex;
@@ -349,9 +462,11 @@
         justify-self: flex-start;
         align-items: flex-start;
         width: 100%;
-        max-height: 340px;
+        max-width: 988px;
+        /* max-height: 340px; */
         margin: auto;
         padding: 20px;
+        margin: 12px;
         border-radius: 8px;
         background-color: rgba(0, 0, 0, 0.6);
     }
@@ -359,9 +474,9 @@
         display: flex;
         position: relative;
         min-width: 100%;
-        height: 100%;
+        height: 128px;
         max-height: 128px;
-        margin: auto;
+        margin: auto auto 24px;
         background-image: url('../img/logo/utc-olp.svg');
         background-size: contain;
         background-position: center;
@@ -378,6 +493,19 @@
         font-weight: 700;
         color: #FFFFFF;
     }
+    .start-container .start-content .body .text {
+        display: flex;
+        position: relative;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        width: 100%;
+        font-family: var(--theme-font);
+        font-size: 24px;
+        font-weight: 500;
+        color: #FFFFFF;
+    }
     .start-container .start-content .button {
         display: flex;
         position: relative;
@@ -386,7 +514,9 @@
         justify-self: flex-end;
         align-self: flex-end;
         width: 100%;
+        max-width: min(600px, calc(100% - 24px));
         height: 48px;
+        margin: auto;
         font-family: var(--theme-font);
         font-weight: 800;
         font-size: 24px;
